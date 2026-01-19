@@ -1,0 +1,180 @@
+name: 💿 StX_Build-iStoreOS-src
+on:
+  repository_dispatch:
+  workflow_dispatch:
+    inputs:
+      openwrt_board:
+        description: "请选择设备型号"
+        required: true
+        default: "jp-tvbox_wxy-oect_fine3399_dg-tn3568"
+        type: choice
+        options:
+          - jp-tvbox_wxy-oect_fine3399_dg-tn3568
+          - a311d
+          - a311d-oes
+          - alark35-3500
+          - anas3035
+          - beikeyun
+          - chainedbox
+          - crrc
+          - dc-a588
+          - dg3399
+          - dg-tn3568
+          - dlfr100
+          - e20c
+          - e25
+          - eaidk-610
+          - emb3531
+          - fine3399
+          - firefly-rk3399
+          - fmx1-pro
+          - jp-tvbox
+          - h28k
+          - h66k
+          - h68k
+          - h69k
+          - h88k
+          - h88k-v3
+          - h96-max-m2
+          - hs530r
+          - hugsun-x99
+          - ipc-r
+          - king3399
+          - kylin3399
+          - lckfb-tspi
+          - leez
+          - lx-r3s
+          - mrkaio-m68s
+          - nanopc-t6
+          - nanopi-r5c
+          - nanopi-r5s
+          - orangepi-5-plus
+          - orangepi-5b
+          - panther-x2
+          - r66s
+          - r68s
+          - renegade-rk3328
+          - rk3318-box
+          - rock5b
+          - rock5c
+          - rp-rk3568
+          - ruisen-box
+          - seewo-sv21
+          - smart-am40
+          - smart-am60
+          - station-m1
+          - station-m2
+          - sv-33a6x
+          - swan1-w28
+          - sw799
+          - tanix-tx6
+          - tb-ls3399
+          - tn3399
+          - tpm312
+          - tqc-a01
+          - tvi3315a
+          - vplus
+          - wocyber-a3
+          - wxy-oect
+          - wxy-oect-replaced
+          - xiaobao
+          - yskj
+          - zcube1-max
+          - zk-r39a
+          - zysj
+      openwrt_kernel:
+        description: "请选择内核版本（若未匹配则自动）"
+        required: true
+        default: "6.6.y"
+        type: choice
+        options:
+          - 5.10.y
+          - 5.15.y
+          - 6.1.y
+          - 6.6.y
+          - 6.12.y
+
+# 关键新增：声明Token权限（解决核心权限问题）
+permissions:
+  contents: write  # 授予写入Release的权限
+  packages: read   # 可选，防止依赖读取权限不足
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: ⏬ 下载 rootfs.tar.gz
+        run: |
+          echo "📦 正在下载预构建 rootfs"
+          mkdir -p bin/targets/armsr/armv8
+          curl -L -o bin/targets/armsr/armv8/openwrt-armvirt-64-default-rootfs.tar.gz \
+            https://github.com/Kwonelee/Rootfs-Actions/releases/download/generic-rootfs/istoreos-armsr-armv8-generic-rootfs.tar.gz
+
+      - name: 🔍 查找rootfs.tar.gz所在路径
+        id: find_rootfs
+        run: |
+          ROOTFS_FILE=$(find bin/targets/armsr/armv8/ -type f -name "*rootfs.tar.gz" | head -n1)
+          echo "✅ Found: $ROOTFS_FILE"
+          if [ ! -f "$ROOTFS_FILE" ]; then
+            echo "❌ 找不到 rootfs.tar.gz 文件"
+            exit 1
+          fi
+          echo "file=$ROOTFS_FILE" >> $GITHUB_OUTPUT
+
+      - name: 🧱 打包iStoreOS固件
+        uses: Kwonelee/amlogic-s9xxx-openwrt@main
+        with:
+          openwrt_path: ${{ steps.find_rootfs.outputs.file }}
+          openwrt_board: ${{ inputs.openwrt_board }}
+          openwrt_kernel: ${{ inputs.openwrt_kernel }}
+          auto_kernel: true
+          kernel_repo: ophub/kernel
+          kernel_usage: stable
+          builder_name: kwonelee
+
+      - name: 📜 调整.img.gz 文件名
+        id: rename
+        run: |
+          for FILE in ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz; do
+            echo "Processing file: $FILE"
+            FILENAME=$(basename "$FILE")
+            NEW_FILENAME=$(echo "$FILENAME" | sed 's/openwrt/istoreos_24.10.2/g')
+            if [ "$FILENAME" != "$NEW_FILENAME" ]; then
+              mv "$FILE" "${{ env.PACKAGED_OUTPUTPATH }}/$NEW_FILENAME"
+              echo "Renamed $FILENAME to $NEW_FILENAME"
+            else
+              echo "No need to rename $FILENAME"
+            fi
+          done
+
+      - name: 🚀 上传到 Release
+        uses: softprops/action-gh-release@v2.2.1
+        with:
+          # 修复：动态生成唯一Tag，避免重复
+          tag_name: iStoreOS-24.10.2-${{ inputs.openwrt_board }}-${{ github.run_id }}
+          # 补充：Release名称更清晰
+          name: iStoreOS-24.10.2-${{ inputs.openwrt_board }}-${{ github.run_date }}
+          body: |
+            🔄 版本： iStoreOS-24.10.2-SNAPSHOT（源码编译，追新版）
+            
+            📱 设备： ${{ inputs.openwrt_board }}
+            🧠 内核： ${{ inputs.openwrt_kernel }}（未匹配则自动）
+            📂 来源： https://github.com/istoreos/istoreos
+            
+            🧠 内核替换： Login to iStoreOS → System → Amlogic Service → Replace the Kernel
+            
+            🧩 集成： 基础系统组件、驱动、网络工具、容器支持、LuCI界面及插件（与官方一致）
+            
+            👤 用户名： root
+            🔒 密码： 无
+            🌐 IP： 单网口-动态获取；多网口-192.168.100.1
+          # 确保文件路径正确
+          files: |
+            ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
+          # 可选：允许覆盖同名Tag（防止偶发重复）
+          overwrite: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
