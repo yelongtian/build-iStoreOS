@@ -94,14 +94,11 @@ on:
           - 6.6.y
           - 6.12.y
 
-# 关键新增：声明Token权限（解决核心权限问题）
-permissions:
-  contents: write  # 授予写入Release的权限
-  packages: read   # 可选，防止依赖读取权限不足
-
 jobs:
   build:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write  # 关键：明确赋予Release写入权限（自定义Token也建议添加）
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -138,43 +135,45 @@ jobs:
       - name: 📜 调整.img.gz 文件名
         id: rename
         run: |
+          # 确保打包输出目录存在
+          if [ ! -d "${{ env.PACKAGED_OUTPUTPATH }}" ]; then
+            echo "❌ 打包输出目录不存在：${{ env.PACKAGED_OUTPUTPATH }}"
+            exit 1
+          fi
+          # 批量重命名文件
           for FILE in ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz; do
-            echo "Processing file: $FILE"
-            FILENAME=$(basename "$FILE")
-            NEW_FILENAME=$(echo "$FILENAME" | sed 's/openwrt/istoreos_24.10.2/g')
-            if [ "$FILENAME" != "$NEW_FILENAME" ]; then
+            if [ -f "$FILE" ]; then
+              FILENAME=$(basename "$FILE")
+              NEW_FILENAME=$(echo "$FILENAME" | sed 's/openwrt/istoreos_24.10.2/g')
               mv "$FILE" "${{ env.PACKAGED_OUTPUTPATH }}/$NEW_FILENAME"
-              echo "Renamed $FILENAME to $NEW_FILENAME"
+              echo "✅ 重命名：$FILENAME → $NEW_FILENAME"
             else
-              echo "No need to rename $FILENAME"
+              echo "⚠️  未找到 .img.gz 文件"
+              exit 1
             fi
           done
 
       - name: 🚀 上传到 Release
         uses: softprops/action-gh-release@v2.2.1
         with:
-          # 修复：动态生成唯一Tag，避免重复
-          tag_name: iStoreOS-24.10.2-${{ inputs.openwrt_board }}-${{ github.run_id }}
-          # 补充：Release名称更清晰
-          name: iStoreOS-24.10.2-${{ inputs.openwrt_board }}-${{ github.run_date }}
+          tag_name: iStoreOS-24.10-SNAPSHOT-dhcp
           body: |
             🔄 版本： iStoreOS-24.10.2-SNAPSHOT（源码编译，追新版）
             
-            📱 设备： ${{ inputs.openwrt_board }}
-            🧠 内核： ${{ inputs.openwrt_kernel }}（未匹配则自动）
             📂 来源： https://github.com/istoreos/istoreos
             
-            🧠 内核替换： Login to iStoreOS → System → Amlogic Service → Replace the Kernel
+            🧠 内核： Please Login to iStoreOS → System → Amlogic Service → Replace the Kernel
             
-            🧩 集成： 基础系统组件、驱动、网络工具、容器支持、LuCI界面及插件（与官方一致）
+            🧩 集成： 包含了基础系统组件、驱动、网络工具、容器支持、LuCI界面及插件等。与官方集成列表基本一致
             
             👤 用户名： root
+            
             🔒 密码： 无
-            🌐 IP： 单网口-动态获取；多网口-192.168.100.1
-          # 确保文件路径正确
+            
+            🌐 IP： 单网口-动态获取（从上级路由找寻）；多网口-IP：192.168.100.1
           files: |
             ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz
-          # 可选：允许覆盖同名Tag（防止偶发重复）
-          overwrite: true
+          draft: false  # 直接发布正式Release（可选：true为草稿）
+          prerelease: false  # 非预发布版本
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}  # 沿用你的自定义Token
