@@ -1,0 +1,60 @@
+#!/bin/sh /etc/rc.common
+# Copyright (C) 2007 OpenWrt.org
+
+START=99
+STOP=15
+
+boot() {
+    echo "Applying PCIe fix for RTL8111F..."
+    
+    # Check if dtc is installed
+    if [ ! -x /usr/bin/dtc ]; then
+        echo "dtc (Device Tree Compiler) not found, skipping PCIe fix"
+        return 1
+    fi
+    
+    # Check if pcie_fix.dts exists
+    if [ ! -f /etc/pcie_fix.dts ]; then
+        echo "pcie_fix.dts not found, skipping PCIe fix"
+        return 1
+    fi
+    
+    # Compile DTS to DTB
+    /usr/bin/dtc -I dts -O dtb -o /tmp/pcie_fix.dtb /etc/pcie_fix.dts
+    
+    # Check if compilation succeeded
+    if [ $? -ne 0 ]; then
+        echo "Failed to compile pcie_fix.dts, skipping PCIe fix"
+        return 1
+    fi
+    
+    # Load the device tree overlay
+    echo 0 > /sys/kernel/debug/amba-pl011.0/tx
+    echo 1 > /sys/kernel/debug/amba-pl011.0/tx
+    
+    # Check if PCIe device is present
+    if [ -d /sys/bus/pci/devices ]; then
+        echo "PCIe bus detected, checking for RTL8111F..."
+        lspci -v | grep -i "RTL8111"
+        if [ $? -eq 0 ]; then
+            echo "RTL8111F detected, PCIe fix applied"
+        else
+            echo "RTL8111F not detected, but PCIe fix applied anyway"
+        fi
+    else
+        echo "PCIe bus not detected, skipping PCIe fix"
+        return 1
+    fi
+    
+    echo "PCIe fix applied successfully"
+    return 0
+}
+
+start() {
+    boot
+}
+
+stop() {
+    echo "Stopping PCIe fix service..."
+    return 0
+}
