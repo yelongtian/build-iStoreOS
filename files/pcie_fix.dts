@@ -1,0 +1,77 @@
+pcie@f8000000 {
+    compatible = "rockchip,rk3399-pcie";
+    reg = <0x00 0xf8000000 0x00 0x2000000 0x00 0xfd000000 0x00 0x1000000>;
+    reg-names = "axi-base", "apb-base";
+    device_type = "pci";
+    #address-cells = <0x03>;
+    #size-cells = <0x02>;
+    #interrupt-cells = <0x01>;
+    aspm-no-l0s;
+    bus-range = <0x00 0x1f>;
+    clocks = <&cru ACLK_PCIE>, <&cru ACLK_PERF_PCIE>,
+             <&cru PCLK_PCIE>, <&cru SCLK_PCIE_PM>;
+    clock-names = "aclk", "aclk-perf", "hclk", "pm";
+    interrupts = <GIC_SPI 49 IRQ_TYPE_LEVEL_HIGH 0>,
+                 <GIC_SPI 50 IRQ_TYPE_LEVEL_HIGH 0>,
+                 <GIC_SPI 51 IRQ_TYPE_LEVEL_HIGH 0>;
+    interrupt-names = "sys", "legacy", "client";
+    interrupt-map-mask = <0x0 0x0 0x0 0x7>;
+    interrupt-map = <0x0 0x0 0x0 0x1 &pcie0_intc 0x0 0x0 0x0 0x0 0x2 &pcie0_intc 0x1 0x0 0x0 0x0 0x3 &pcie0_intc 0x2 0x0 0x0 0x0 0x4 &pcie0_intc 0x3>;
+    max-link-speed = <0x2>;
+    msi-map = <0x0 &its 0x0 0x1000>;
+    phys = <&pcie_phy 0>, <&pcie_phy 1>,
+             <&pcie_phy 2>, <&pcie_phy 3>;
+    phy-names = "pcie-phy-0", "pcie-phy-1", "pcie-phy-2", "pcie-phy-3";
+    ranges = <0x83000000 0x0 0xfa000000 0x0 0xfa000000 0x0 0x1e00000 0x81000000 0x0 0xfbe00000 0x0 0xfbe00000 0x0 0x100000>;
+    resets = <&cru SRST_PCIE_CORE>, <&cru SRST_PCIE_MGMT>,
+             <&cru SRST_PCIE_MGMT_STICKY>, <&cru SRST_PCIE_PIPE>,
+             <&cru SRST_PCIE_PM>, <&cru SRST_P_PCIE>,
+             <&cru SRST_A_PCIE>;
+    reset-names = "core", "mgmt", "mgmt-sticky", "pipe", "pm", "pclk", "aclk";
+    status = "okay";
+
+    interrupt-controller {
+        #address-cells = <0x00>;
+        #interrupt-cells = <0x01>;
+        interrupt-controller;
+        interrupt-parent = <&gic>;
+        interrupts = <GIC_SPI 51 IRQ_TYPE_LEVEL_HIGH 0>;
+    };
+
+    /* RTL8111F Gigabit Ethernet Controller support */
+    pinctrl-names = "default";
+    pinctrl-0 = <&pcie_clkreqn_cpm &pcie_clkreqnb_cpm &vcc3v3_pcie_en &pcie_perst &pcie_pwr_en>;
+
+    /* Increase link training timeout to support RTL8111F */
+    rockchip,link-training-timeout = <1500>;
+
+    /* Enable power management for RTL8111F */
+    power-domains = <&power RK3399_PD_PCIE>;
+};
+
+/* PCIe pin controller configuration */
+pcie {
+    pci_clkreqn_cpm {
+        rockchip,pins = <0x02 0x1a 0x00 0xba>;
+    };
+
+    pci_clkreqnb_cpm {
+        rockchip,pins = <0x04 0x18 0x00 0xba>;
+    };
+
+    vcc3v3_pcie_en {
+        rockchip,pins = <0x01 0x11 0x00 0xba>;
+    };
+
+    pcie_perst {
+        rockchip,pins = <0x04 0x19 0x00 0xba>;
+    };
+
+    pcie_pwr_en {
+        rockchip,pins = <0x01 0x11 0x00 0xba>;
+    };
+
+    pcie_3g_drv {
+        rockchip,pins = <0x00 0x02 0x00 0xbd>;
+    };
+};
