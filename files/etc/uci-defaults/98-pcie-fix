@@ -1,0 +1,58 @@
+#!/bin/sh
+# Enable PCIe fix service for RTL8111F
+
+# Copy pcie_fix.dts to /etc
+if [ -f /etc/pcie_fix.dts ]; then
+    echo "pcie_fix.dts already exists in /etc"
+else
+    if [ -f /tmp/pcie_fix.dts ]; then
+        cp /tmp/pcie_fix.dts /etc/
+        echo "Copied pcie_fix.dts to /etc"
+    else
+        echo "pcie_fix.dts not found, skipping copy"
+    fi
+fi
+
+# Make pcie_fix service executable
+if [ -f /etc/init.d/pcie_fix ]; then
+    chmod +x /etc/init.d/pcie_fix
+    echo "Made pcie_fix service executable"
+    
+    # Enable pcie_fix service
+    /etc/init.d/pcie_fix enable
+    echo "Enabled pcie_fix service"
+else
+    echo "pcie_fix service not found, skipping enable"
+fi
+
+# Install dtc if not present
+if [ ! -x /usr/bin/dtc ]; then
+    echo "dtc not found, trying to install..."
+    opkg update && opkg install dtc
+    if [ $? -eq 0 ]; then
+        echo "dtc installed successfully"
+    else
+        echo "Failed to install dtc"
+    fi
+else
+    echo "dtc already installed"
+fi
+
+# Install r8169 driver if not present
+if [ ! -d /lib/modules/$(uname -r) ]; then
+    echo "Kernel modules directory not found, skipping driver check"
+else
+    if [ ! -f /lib/modules/$(uname -r)/kernel/drivers/net/ethernet/realtek/r8169.ko ]; then
+        echo "r8169 driver not found, trying to install..."
+        opkg update && opkg install kmod-r8169
+        if [ $? -eq 0 ]; then
+            echo "r8169 driver installed successfully"
+        else
+            echo "Failed to install r8169 driver"
+        fi
+    else
+        echo "r8169 driver already present"
+    fi
+fi
+
+exit 0
