@@ -4,18 +4,28 @@ on:
   workflow_dispatch:
     inputs:
       openwrt_board:
-        description: "请选择设备型号"
+        description: "1、请选择设备型号"
         required: true
-        default: "jp-tvbox_wxy-oect_fine3399_dg-tn3568"
+        default: "s905d_s905x3_s912_s922x-ct2000"
         type: choice
         options:
-          - jp-tvbox_wxy-oect_fine3399_dg-tn3568
+          - a311d-oes_s922x-oes-plus_wxy-oect
+          - nsy-g16-plus_nsy-g68-plus_bdy-g18-pro
+          - s905d_s905x3_s912_s922x-ct2000
           - a311d
           - a311d-oes
           - alark35-3500
           - anas3035
+          - aio-3399b
+          - aio-3399c
+          - aio-3399c-ai
+          - bdkj-bd-one
+          - bdy-g18-pro
           - beikeyun
+          - boca-tcn100
+          - cd1000
           - chainedbox
+          - cm3588-nas
           - crrc
           - dc-a588
           - dg3399
@@ -26,38 +36,56 @@ on:
           - eaidk-610
           - emb3531
           - fine3399
+          - firefly-jd4
           - firefly-rk3399
           - fmx1-pro
-          - jp-tvbox
+          - fmx1-pro-b
+          - gea-6319
+          - gzpeite-p01
           - h28k
+          - h618-devboard
           - h66k
           - h68k
           - h69k
           - h88k
           - h88k-v3
           - h96-max-m2
+          - hk1-rbox-k8s
           - hs530r
+          - ht2
           - hugsun-x99
           - ipc-r
+          - jp-tvbox
           - king3399
           - kylin3399
           - lckfb-tspi
           - leez
           - lx-r3s
+          - lyt-t68m
+          - lz-d3568
+          - lz-d3588
+          - lz-k3568
           - mrkaio-m68s
+          - nanopc-t4
           - nanopc-t6
+          - nanopi-m5
           - nanopi-r5c
           - nanopi-r5s
+          - nsy-g16-plus
+          - nsy-g68-plus
+          - orangepi-3b
           - orangepi-5-plus
           - orangepi-5b
+          - orangepi-zero3
           - panther-x2
+          - photonicat
           - r66s
           - r68s
           - renegade-rk3328
           - rk3318-box
+          - rock-5-itx
           - rock5b
           - rock5c
-          - rp-rk3568
           - ruisen-box
           - s905
           - s905-beelink-mini
@@ -115,6 +143,7 @@ on:
           - s905x3-ip1001m
           - s905x3-q1
           - s905x3-q2
+          - s905x3-tox1
           - s905x3-tx3
           - s905x3-tx3-bz
           - s905x3-ugoosx3
@@ -149,9 +178,12 @@ on:
           - smart-am60
           - station-m1
           - station-m2
+          - station-p2
           - sv-33a6x
+          - sv-33a6x-vpu
           - swan1-w28
           - sw799
+          - taram
           - tanix-tx6
           - tb-ls3399
           - tn3399
@@ -161,23 +193,31 @@ on:
           - vplus
           - wocyber-a3
           - wxy-oect
-          - wxy-oect-replaced
+          - wxy-oect-mod
+          - x88pro20
+          - x98h
           - xiaobao
           - yskj
           - zcube1-max
           - zk-r39a
           - zysj
       openwrt_kernel:
-        description: "请选择内核版本（若未匹配则自动）"
+        description: "2、请选择内核版本"
         required: true
         default: "6.6.y"
         type: choice
         options:
-          - 5.10.y
-          - 5.15.y
-          - 6.1.y
           - 6.6.y
           - 6.12.y
+          - 6.18.y
+      auto_kernel:
+        description: "自动使用最新内核-未匹配则自动"
+        required: false
+        default: true
+        type: boolean
+
+env:
+  VERSION: 24.10.5
 
 jobs:
   build:
@@ -204,13 +244,36 @@ jobs:
           fi
           echo "file=$ROOTFS_FILE" >> $GITHUB_OUTPUT
 
+      # ==============================================
+      # 【核心】覆盖自定义 DTB + U-BOOT 文件（针对emb3531）
+      # ==============================================
+      - name: 替换自定义内核设备树(dtb)和U-Boot引导文件
+        run: |
+          # 编译工具的真实工作目录（从你的日志提取，100%精准）
+          TOOL_DIR="/home/runner/work/_actions/Kwonelee/amlogic-s9xxx-openwrt/main"
+          # 你的仓库自定义文件目录
+          CUSTOM_DIR="${GITHUB_WORKSPACE}/make-openwrt"
+          
+          echo "=== 开始替换自定义文件 ==="
+          echo "工具目录：$TOOL_DIR"
+          echo "自定义文件目录：$CUSTOM_DIR"
+          
+          # 1. 替换 自定义内核dtb文件（你的rk35xx/6.1.y设备树）
+          cp -rf "$CUSTOM_DIR/kernel/" "$TOOL_DIR/"
+          # 2. 替换 自定义U-Boot文件（你的emb-3531引导文件）
+          cp -rf "$CUSTOM_DIR/u-boot/" "$TOOL_DIR/"
+          
+          echo "=== 替换完成 ==="
+          ls -la "$TOOL_DIR/kernel/"
+          ls -la "$TOOL_DIR/u-boot/"
+
       - name: 🧱 打包iStoreOS固件
         uses: Kwonelee/amlogic-s9xxx-openwrt@main
         with:
           openwrt_path: ${{ steps.find_rootfs.outputs.file }}
           openwrt_board: ${{ inputs.openwrt_board }}
           openwrt_kernel: ${{ inputs.openwrt_kernel }}
-          auto_kernel: true
+          auto_kernel: ${{ inputs.auto_kernel }}
           kernel_repo: ophub/kernel
           kernel_usage: stable
           builder_name: kwonelee
@@ -221,7 +284,7 @@ jobs:
           for FILE in ${{ env.PACKAGED_OUTPUTPATH }}/*.img.gz; do
             echo "Processing file: $FILE"
             FILENAME=$(basename "$FILE")
-            NEW_FILENAME=$(echo "$FILENAME" | sed 's/openwrt/istoreos_24.10.2/g')
+            NEW_FILENAME=$(echo "$FILENAME" | sed 's/openwrt/istoreos_${{ env.VERSION }}/g')
             if [ "$FILENAME" != "$NEW_FILENAME" ]; then
               mv "$FILE" "${{ env.PACKAGED_OUTPUTPATH }}/$NEW_FILENAME"
               echo "Renamed $FILENAME to $NEW_FILENAME"
@@ -233,15 +296,15 @@ jobs:
       - name: 🚀 上传到 Release
         uses: softprops/action-gh-release@v2.2.1
         with:
-          tag_name: iStoreOS-24.10-SNAPSHOT-dhcp
+          tag_name: iStoreOS-${{ env.VERSION }}-SNAPSHOT-dhcp
           body: |
-            🔄 版本： iStoreOS-24.10.2-SNAPSHOT（源码编译，追新版）
+            🔄 版本： iStoreOS-${{ env.VERSION }}-SNAPSHOT（源码编译后构建，插件集成适度精简）
             
             📂 来源： https://github.com/istoreos/istoreos
             
             🧠 内核： Please Login to iStoreOS → System → Amlogic Service → Replace the Kernel
             
-            🧩 集成： 包含了基础系统组件、驱动、网络工具、容器支持、LuCI界面及插件等。与官方集成列表基本一致
+            🧩 集成： 包含了基础系统组件、驱动、网络工具、容器支持、LuCI界面及插件等
             
             👤 用户名： root
             
